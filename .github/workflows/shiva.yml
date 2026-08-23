@@ -20,24 +20,19 @@ jobs:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-
       - name: Build Docker Image
         run: |
-          docker build \
-            -t ${{ secrets.DOCKERHUB_USERNAME }}/shiva:latest .
-
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/shiva:latest .
 
       - name: Push Docker Image
         run: |
-          docker push \
-            ${{ secrets.DOCKERHUB_USERNAME }}/shiva:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/shiva:latest
 
 
   # ==========================================
@@ -51,11 +46,8 @@ jobs:
     runs-on: self-hosted
 
     env:
-
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
       AWS_REGION: ${{ secrets.AWS_REGION }}
 
     steps:
@@ -63,97 +55,43 @@ jobs:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-
-      # ======================================
-      # CHECK AWS
-      # ======================================
-
-      - name: Check AWS Credentials
+      - name: Check AWS
         run: |
           aws sts get-caller-identity
-
-
-      - name: Check AWS Region
-        run: |
-          echo "AWS Region: $AWS_REGION"
-
-
-      # ======================================
-      # CHECK DOCKER
-      # ======================================
 
       - name: Check Docker
         run: |
           docker --version
           docker ps
 
-
-      # ======================================
-      # CHECK MINIKUBE
-      # ======================================
-
       - name: Check Minikube
         run: |
           minikube status
 
-
-      # ======================================
-      # CHECK KUBERNETES
-      # ======================================
-
-      - name: Check Kubernetes Nodes
+      - name: Check Kubernetes
         run: |
           kubectl get nodes
-
-
-      # ======================================
-      # APPLY DEPLOYMENT
-      # ======================================
 
       - name: Deploy Application
         run: |
           kubectl apply -f deployment.yaml
 
-
-      # ======================================
-      # APPLY SERVICE
-      # ======================================
-
       - name: Deploy Service
         run: |
           kubectl apply -f service.yaml
 
-
-      # ======================================
-      # RESTART APPLICATION
-      # ======================================
-
-      - name: Restart Application
+      - name: Update Docker Image
         run: |
-          kubectl rollout restart deployment/shiva-app
-
-
-      # ======================================
-      # WAIT FOR DEPLOYMENT
-      # ======================================
+          kubectl set image deployment/shiva-app \
+            shiva-container=${{ secrets.DOCKERHUB_USERNAME }}/shiva:latest
 
       - name: Wait for Deployment
         run: |
           kubectl rollout status deployment/shiva-app --timeout=120s
 
-
-      # ======================================
-      # CHECK PODS
-      # ======================================
-
       - name: Check Pods
         run: |
           kubectl get pods -o wide
-
-
-      # ======================================
-      # CHECK SERVICE
-      # ======================================
 
       - name: Check Service
         run: |
