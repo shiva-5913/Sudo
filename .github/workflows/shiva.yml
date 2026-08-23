@@ -7,9 +7,9 @@ on:
 
 jobs:
 
-  # ==========================================
-  # BUILD AND PUSH DOCKER IMAGE
-  # ==========================================
+  # ==================================================
+  # JOB 1 - BUILD AND PUSH DOCKER IMAGE
+  # ==================================================
 
   build-and-push:
 
@@ -17,8 +17,9 @@ jobs:
 
     steps:
 
-      - name: Checkout
+      - name: Checkout Source Code
         uses: actions/checkout@v4
+
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -26,10 +27,12 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+
       - name: Build Docker Image
         run: |
           docker build \
             -t ${{ secrets.DOCKERHUB_USERNAME }}/shiva:latest .
+
 
       - name: Push Docker Image
         run: |
@@ -37,9 +40,9 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/shiva:latest
 
 
-  # ==========================================
-  # DEPLOY TO EC2 MINIKUBE
-  # ==========================================
+  # ==================================================
+  # JOB 2 - DEPLOY TO MINIKUBE ON EC2
+  # ==================================================
 
   deploy:
 
@@ -49,13 +52,13 @@ jobs:
 
     steps:
 
-      - name: Checkout
+      - name: Checkout Source Code
         uses: actions/checkout@v4
 
 
-      # ======================================
+      # ==================================================
       # COPY KUBERNETES FILES TO EC2
-      # ======================================
+      # ==================================================
 
       - name: Copy Kubernetes Files
         uses: appleboy/scp-action@v0.1.7
@@ -67,11 +70,11 @@ jobs:
           target: "/home/ubuntu/shiva"
 
 
-      # ======================================
-      # CONNECT TO EC2
-      # ======================================
+      # ==================================================
+      # SSH INTO EC2 AND DEPLOY TO MINIKUBE
+      # ==================================================
 
-      - name: Deploy to Minikube
+      - name: Deploy Application to Minikube
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -80,54 +83,84 @@ jobs:
 
           script: |
 
-            echo "=============================="
+            echo "================================"
+            echo "CHECK USER"
+            echo "================================"
+
+            whoami
+
+
+            echo "================================"
+            echo "CHECK DOCKER"
+            echo "================================"
+
+            docker --version
+            docker ps
+
+
+            echo "================================"
             echo "CHECK MINIKUBE"
-            echo "=============================="
+            echo "================================"
 
             minikube status
 
-            echo "=============================="
+
+            echo "================================"
             echo "CHECK KUBERNETES"
-            echo "=============================="
+            echo "================================"
 
             kubectl get nodes
 
-            echo "=============================="
+
+            echo "================================"
+            echo "CHECK FILES"
+            echo "================================"
+
+            ls -la /home/ubuntu/shiva
+
+
+            echo "================================"
             echo "APPLY DEPLOYMENT"
-            echo "=============================="
+            echo "================================"
 
             kubectl apply \
               -f /home/ubuntu/shiva/deployment.yaml
 
-            echo "=============================="
+
+            echo "================================"
             echo "APPLY SERVICE"
-            echo "=============================="
+            echo "================================"
 
             kubectl apply \
               -f /home/ubuntu/shiva/service.yaml
 
-            echo "=============================="
-            echo "UPDATE IMAGE"
-            echo "=============================="
+
+            echo "================================"
+            echo "UPDATE DOCKER IMAGE"
+            echo "================================"
 
             kubectl set image deployment/shiva-app \
               shiva-container=${{ secrets.DOCKERHUB_USERNAME }}/shiva:latest
 
-            echo "=============================="
-            echo "WAIT FOR DEPLOYMENT"
-            echo "=============================="
 
-            kubectl rollout status deployment/shiva-app \
+            echo "================================"
+            echo "WAIT FOR DEPLOYMENT"
+            echo "================================"
+
+            kubectl rollout status \
+              deployment/shiva-app \
               --timeout=120s
 
-            echo "=============================="
-            echo "PODS"
-            echo "=============================="
+
+            echo "================================"
+            echo "CHECK PODS"
+            echo "================================"
 
             kubectl get pods -o wide
 
-            echo "=============================="
-            echo "SERVICE"
-            echo "=============================="
+
+            echo "================================"
+            echo "CHECK SERVICE"
+            echo "================================"
 
             kubectl get service shiva-service
