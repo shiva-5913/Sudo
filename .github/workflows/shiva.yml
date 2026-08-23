@@ -7,6 +7,10 @@ on:
 
 jobs:
 
+  # ==========================================
+  # BUILD AND PUSH DOCKER IMAGE
+  # ==========================================
+
   build:
     runs-on: ubuntu-latest
 
@@ -23,12 +27,18 @@ jobs:
 
       - name: Build Image
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/shiva:latest .
+          docker build \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/shiva:latest .
 
       - name: Push Image
         run: |
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/shiva:latest
+          docker push \
+            ${{ secrets.DOCKERHUB_USERNAME }}/shiva:latest
 
+
+  # ==========================================
+  # DEPLOY TO MINIKUBE
+  # ==========================================
 
   deploy:
     needs: build
@@ -39,31 +49,90 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure AWS
-        uses: aws-actions/configure-aws-credentials@v4
+
+      # ======================================
+      # START MINIKUBE
+      # ======================================
+
+      - name: Start Minikube
+        uses: medyagh/setup-minikube@latest
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          driver: docker
 
-      - name: Update kubeconfig
+
+      # ======================================
+      # CHECK MINIKUBE
+      # ======================================
+
+      - name: Check Minikube
         run: |
-          aws eks update-kubeconfig \
-            --region ${{ secrets.AWS_REGION }} \
-            --name YOUR_EKS_CLUSTER_NAME
+          minikube status
+          kubectl get nodes
 
-      - name: Deploy
+
+      # ======================================
+      # PULL IMAGE FROM DOCKER HUB
+      # ======================================
+
+      - name: Pull Docker Image
+        run: |
+          docker pull \
+            ${{ secrets.DOCKERHUB_USERNAME }}/shiva:latest
+
+
+      # ======================================
+      # LOAD IMAGE INTO MINIKUBE
+      # ======================================
+
+      - name: Load Image Into Minikube
+        run: |
+          minikube image load \
+            ${{ secrets.DOCKERHUB_USERNAME }}/shiva:latest
+
+
+      # ======================================
+      # DEPLOY KUBERNETES
+      # ======================================
+
+      - name: Deploy Application
         run: |
           kubectl apply -f deployment.yaml
           kubectl apply -f service.yaml
+
+
+      # ======================================
+      # UPDATE IMAGE
+      # ======================================
 
       - name: Update Image
         run: |
           kubectl set image deployment/shiva-app \
             shiva-container=${{ secrets.DOCKERHUB_USERNAME }}/shiva:latest
 
+
+      # ======================================
+      # WAIT FOR DEPLOYMENT
+      # ======================================
+
       - name: Check Deployment
         run: |
-          kubectl rollout status deployment/shiva-app
-          kubectl get pods
-          kubectl get services
+          kubectl rollout status deployment/shiva-app \
+            --timeout=120s
+
+
+      # ======================================
+      # CHECK PODS
+      # ======================================
+
+      - name: Check Pods
+        run: |
+          kubectl get pods -o wide
+
+
+      # ======================================
+      # CHECK SERVICE
+      # ======================================
+
+      - name: Check Service
+        run: |
+          kubectl get service shiva-service
