@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shiva-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: shiva-app
+  template:
+    metadata:
+      labels:
+        app: shiva-app
+    spec:
+      containers:
+        - name: shiva-container
+          image: YOUR_DOCKERHUB_USERNAME/shiva:latest
+          ports:
+            - containerPort: 80
