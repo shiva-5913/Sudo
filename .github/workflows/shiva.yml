@@ -7,17 +7,12 @@ on:
 
 jobs:
 
-  # ==========================================
-  # JOB 1 - BUILD AND PUSH DOCKER IMAGE
-  # ==========================================
-
-  build-and-push:
-
+  build:
     runs-on: ubuntu-latest
 
     steps:
 
-      - name: Checkout Source Code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Login to Docker Hub
@@ -26,73 +21,49 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build Docker Image
+      - name: Build Image
         run: |
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/shiva:latest .
 
-      - name: Push Docker Image
+      - name: Push Image
         run: |
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/shiva:latest
 
 
-  # ==========================================
-  # JOB 2 - DEPLOY TO MINIKUBE ON EC2
-  # ==========================================
-
   deploy:
-
-    needs: build-and-push
-
-    runs-on: self-hosted
-
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION: ${{ secrets.AWS_REGION }}
+    needs: build
+    runs-on: ubuntu-latest
 
     steps:
 
-      - name: Checkout Source Code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check AWS
-        run: |
-          aws sts get-caller-identity
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Check Docker
+      - name: Update kubeconfig
         run: |
-          docker --version
-          docker ps
+          aws eks update-kubeconfig \
+            --region ${{ secrets.AWS_REGION }} \
+            --name YOUR_EKS_CLUSTER_NAME
 
-      - name: Check Minikube
-        run: |
-          minikube status
-
-      - name: Check Kubernetes
-        run: |
-          kubectl get nodes
-
-      - name: Deploy Application
+      - name: Deploy
         run: |
           kubectl apply -f deployment.yaml
-
-      - name: Deploy Service
-        run: |
           kubectl apply -f service.yaml
 
-      - name: Update Docker Image
+      - name: Update Image
         run: |
           kubectl set image deployment/shiva-app \
             shiva-container=${{ secrets.DOCKERHUB_USERNAME }}/shiva:latest
 
-      - name: Wait for Deployment
+      - name: Check Deployment
         run: |
-          kubectl rollout status deployment/shiva-app --timeout=120s
-
-      - name: Check Pods
-        run: |
-          kubectl get pods -o wide
-
-      - name: Check Service
-        run: |
-          kubectl get service shiva-service
+          kubectl rollout status deployment/shiva-app
+          kubectl get pods
+          kubectl get services
