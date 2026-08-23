@@ -20,6 +20,6 @@ spec:
       containers:
         - name: shiva-container
           image: shiva5913/shiva:latest
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80
