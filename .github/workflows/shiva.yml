@@ -7,20 +7,33 @@ on:
 
 jobs:
 
-  build:
+  # ==========================================
+  # JOB 1: BUILD AND PUSH DOCKER IMAGE
+  # ==========================================
+
+  build-and-push:
+
     runs-on: ubuntu-latest
 
     steps:
 
-      - name: Checkout
+      - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Check Files
+      - name: Verify Project Files
         run: |
+          echo "Current directory:"
           pwd
+
+          echo "Project files:"
           ls -la
-          echo "Kubernetes files:"
-          ls -l deployment.yaml service.yaml
+
+          echo "Checking Kubernetes files:"
+          test -f deployment.yaml
+          test -f service.yaml
+
+          echo "deployment.yaml found"
+          echo "service.yaml found"
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -28,72 +41,152 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build Image
+      - name: Build Docker Image
         run: |
           docker build \
             -t ${{ secrets.DOCKERHUB_USERNAME }}/shiva:latest .
 
-      - name: Push Image
+      - name: Push Docker Image
         run: |
           docker push \
             ${{ secrets.DOCKERHUB_USERNAME }}/shiva:latest
 
 
+  # ==========================================
+  # JOB 2: DEPLOY TO MINIKUBE
+  # ==========================================
+
   deploy:
-    needs: build
+
+    needs: build-and-push
+
     runs-on: ubuntu-latest
 
     steps:
 
-      - name: Checkout
+      - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Check Files
+      - name: Verify Kubernetes Files
         run: |
+          echo "Current directory:"
           pwd
+
+          echo "Files:"
           ls -la
-          ls -l deployment.yaml
-          ls -l service.yaml
+
+          echo "Checking deployment.yaml:"
+          test -f deployment.yaml
+
+          echo "Checking service.yaml:"
+          test -f service.yaml
+
+          echo "Both Kubernetes YAML files found"
+
+
+      # ======================================
+      # START MINIKUBE
+      # ======================================
 
       - name: Start Minikube
         uses: medyagh/setup-minikube@latest
         with:
           driver: docker
 
+
+      # ======================================
+      # CHECK MINIKUBE
+      # ======================================
+
       - name: Check Minikube
         run: |
           minikube status
           kubectl get nodes
+
+
+      # ======================================
+      # LOGIN TO DOCKER HUB
+      # ======================================
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+
+      # ======================================
+      # PULL IMAGE
+      # ======================================
 
       - name: Pull Docker Image
         run: |
           docker pull \
             ${{ secrets.DOCKERHUB_USERNAME }}/shiva:latest
 
+
+      # ======================================
+      # LOAD IMAGE INTO MINIKUBE
+      # ======================================
+
       - name: Load Image Into Minikube
         run: |
           minikube image load \
             ${{ secrets.DOCKERHUB_USERNAME }}/shiva:latest
+
+
+      # ======================================
+      # DEPLOY APPLICATION
+      # ======================================
 
       - name: Deploy Application
         run: |
           kubectl apply -f deployment.yaml
           kubectl apply -f service.yaml
 
-      - name: Update Image
+
+      # ======================================
+      # UPDATE IMAGE
+      # ======================================
+
+      - name: Update Application Image
         run: |
           kubectl set image deployment/shiva-app \
             shiva-container=${{ secrets.DOCKERHUB_USERNAME }}/shiva:latest
+
+
+      # ======================================
+      # WAIT FOR DEPLOYMENT
+      # ======================================
 
       - name: Wait for Deployment
         run: |
           kubectl rollout status deployment/shiva-app \
             --timeout=120s
 
+
+      # ======================================
+      # CHECK PODS
+      # ======================================
+
       - name: Check Pods
         run: |
           kubectl get pods -o wide
 
+
+      # ======================================
+      # CHECK SERVICE
+      # ======================================
+
       - name: Check Service
         run: |
           kubectl get service shiva-service
+
+
+      # ======================================
+      # SHOW MINIKUBE URL
+      # ======================================
+
+      - name: Get Application URL
+        run: |
+          minikube service shiva-service --url
