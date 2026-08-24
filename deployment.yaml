@@ -2,30 +2,30 @@ apiVersion: apps/v1
 kind: Deployment
 
 metadata:
-  name: java-app
+  name: sudoku-app
 
 spec:
   replicas: 2
 
   selector:
     matchLabels:
-      app: java-app
+      app: sudoku-app
 
   template:
     metadata:
       labels:
-        app: java-app
+        app: sudoku-app
 
     spec:
       containers:
-        - name: java-app
+        - name: sudoku-container
 
-          image: kurvashivashankar/java-app:latest
+          image: kurvashivashankar/sudoku-app:latest
 
           imagePullPolicy: Always
 
           ports:
-            - containerPort: 8080
+            - containerPort: 80
 
           resources:
             requests:
