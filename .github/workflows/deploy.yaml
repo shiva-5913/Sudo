@@ -11,11 +11,11 @@ jobs:
 
     steps:
 
-      # 1. Checkout source code
+      # 1. Checkout GitHub repository
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Login to Docker Hub
+      # 2. Docker Hub login
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -28,22 +28,31 @@ jobs:
           docker build \
             -t ${{ secrets.DOCKER_USERNAME }}/sudoku-app:${{ github.sha }} .
 
-      # 4. Push Docker image to Docker Hub
+      # 4. Push Docker image
       - name: Push Docker image
         run: |
           docker push \
             ${{ secrets.DOCKER_USERNAME }}/sudoku-app:${{ github.sha }}
 
-      # 5. Connect to EC2 and deploy to Minikube
-      - name: Deploy to EC2 Minikube
+      # 5. Copy Kubernetes YAML files to EC2
+      - name: Copy Kubernetes files
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "deployment.yaml,service.yaml"
+          target: "/home/ubuntu/"
+
+      # 6. Deploy to Minikube
+      - name: Deploy to Minikube
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
 
-            echo "Connected to EC2"
+          script: |
 
             echo "Checking Minikube..."
             minikube status
@@ -51,14 +60,11 @@ jobs:
             echo "Checking Kubernetes..."
             kubectl get nodes
 
-            echo "Going to application directory..."
-            cd ~/Sudo
-
             echo "Applying Deployment..."
-            kubectl apply -f deployment.yaml
+            kubectl apply -f /home/ubuntu/deployment.yaml
 
             echo "Applying Service..."
-            kubectl apply -f service.yaml
+            kubectl apply -f /home/ubuntu/service.yaml
 
             echo "Updating Docker image..."
             kubectl set image deployment/sudoku-app \
@@ -71,4 +77,6 @@ jobs:
             kubectl get pods -o wide
 
             echo "Checking Service..."
-            kubectl get svc sudoku-service
+            kubectl get service sudoku-service
+
+            echo "Deployment completed successfully!"
